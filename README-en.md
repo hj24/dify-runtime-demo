@@ -97,7 +97,7 @@ The Runtime is responsible for parsing the DSL and scheduling node execution. It
 
 ### Architecture Diagram
 
-![Runtime Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIENMSVtDTEkgLyBBUEldIC0tPiBQYXJzZXJbRFNMIFBhcnNlcl0KICAgIFBhcnNlciAtLT58V29ya2Zsb3dHcmFwaHwgRW5naW5lW1dvcmtmbG93IEVuZ2luZV0KICAgIAogICAgc3ViZ3JhcGggUnVudGltZSBDb3JlCiAgICAgICAgRW5naW5lIC0tPnxSZWFkL1dyaXRlfCBNZW1vcnlbR2xvYmFsIE1lbW9yeV0KICAgICAgICBFbmdpbmUgLS0+fFN1Ym1pdCBUYXNrc3wgRXhlY3V0b3JbVGhyZWFkUG9vbCBFeGVjdXRvcl0KICAgICAgICAKICAgICAgICBFeGVjdXRvciAtLT58UnVufCBOb2RlQVtOb2RlIEluc3RhbmNlIEFdCiAgICAgICAgRXhlY3V0b3IgLS0+fFJ1bnwgTm9kZUJbTm9kZSBJbnN0YW5jZSBCXQogICAgICAgIAogICAgICAgIE5vZGVBIC0tPnxSZXN1bHR8IE1lbW9yeQogICAgICAgIE5vZGVCIC0tPnxSZXN1bHR8IE1lbW9yeQogICAgZW5kCiAgICAKICAgIE1lbW9yeSAtLi0+fENvbnRleHR8IE5vZGVBCiAgICBNZW1vcnkgLS4tPnxDb250ZXh0fCBOb2RlQg==)
+![Runtime Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIENMSVtDTEkgLyBBUEldIC0tPiBQYXJzZXJbRFNMIFBhcnNlcl0KICAgIFBhcnNlciAtLT58V29ya2Zsb3dHcmFwaHwgRW5naW5lW1dvcmtmbG93IEVuZ2luZV0KICAgIAogICAgc3ViZ3JhcGggUnVudGltZV9Db3JlIFtSdW50aW1lIENvcmVdCiAgICAgICAgZGlyZWN0aW9uIFRCCiAgICAgICAgRW5naW5lIC0tPnxJbml0fCBNZW1vcnlbR2xvYmFsIE1lbW9yeV0KICAgICAgICAKICAgICAgICBzdWJncmFwaCBTY2hlZHVsZXIgW1NjaGVkdWxlciBMb29wXQogICAgICAgICAgICBkaXJlY3Rpb24gVEIKICAgICAgICAgICAgQ2hlY2tbRGVwZW5kZW5jeSBDaGVja10KICAgICAgICAgICAgU3VibWl0W1N1Ym1pdCBUYXNrc10KICAgICAgICAgICAgV2FpdFtXYWl0IGZvciBFdmVudF0KICAgICAgICAgICAgVXBkYXRlW1VwZGF0ZSBTdGF0ZV0KICAgICAgICAgICAgCiAgICAgICAgICAgIENoZWNrIC0tPnxSZWFkeXwgU3VibWl0CiAgICAgICAgICAgIENoZWNrIC0tPnxTa2lwcGVkfCBVcGRhdGUKICAgICAgICAgICAgU3VibWl0IC0tPnxGdXR1cmV8IFdhaXQKICAgICAgICAgICAgV2FpdCAtLT58Tm9kZSBGaW5pc2hlZHwgVXBkYXRlCiAgICAgICAgICAgIFVwZGF0ZSAtLT4gQ2hlY2sKICAgICAgICBlbmQKICAgICAgICAKICAgICAgICBFbmdpbmUgLS0+IENoZWNrCiAgICAgICAgCiAgICAgICAgU3VibWl0IC0tPiBFeGVjdXRvcltUaHJlYWRQb29sIEV4ZWN1dG9yXQogICAgICAgIAogICAgICAgIEV4ZWN1dG9yIC0tPnxBc3luYyBSdW58IE5vZGVbTm9kZSBJbnN0YW5jZV0KICAgICAgICBOb2RlIC0tPnxXcml0ZSBSZXN1bHR8IE1lbW9yeQogICAgZW5k)
 
 ### Core Components
 
@@ -121,6 +121,42 @@ The Runtime is responsible for parsing the DSL and scheduling node execution. It
 4.  **Node System (`runtime/nodes/`)**:
     *   Defines the `Node` base class and concrete implementations (e.g., `LLMNode`, `RouterNode`).
     *   Each node executes independently, receiving `inputs` and returning a dictionary result.
+
+### 4. Scheduling Algorithm Detail
+
+The Runtime's scheduling core maintains a state loop to ensure nodes execute in the correct dependency order and with proper parallelism.
+
+#### State Management
+Each node transitions through the following states during its lifecycle:
+- **PENDING**: Initial state, waiting for dependencies to be met.
+- **READY**: All dependencies are `COMPLETED`, ready to be submitted for execution.
+- **RUNNING**: Currently executing in the thread pool.
+- **COMPLETED**: Execution successful, results written to Global Memory.
+- **SKIPPED**: Skipped due to skipped dependencies or unsatisfied `condition`.
+
+#### Scheduling Loop
+The main loop logic in `WorkflowEngine.run()` is as follows:
+
+1.  **Dependency Check**:
+    *   Iterate through all incomplete (Non-Terminal) nodes.
+    *   **Propagation**: If *any* upstream dependency of a node is `SKIPPED`, the node is immediately marked as `SKIPPED`.
+    *   **Activation**: If *all* upstream dependencies of a node are `COMPLETED`, the node is marked as `READY`.
+
+2.  **Submission**:
+    *   Submit all `READY` nodes to the `ThreadPoolExecutor`.
+    *   **Condition Evaluation** (before submission):
+        *   Render the `condition` template (e.g., `{{ inputs.val > 10 }}`).
+        *   If the result is `False`, do not submit; mark the node as `SKIPPED` directly.
+        *   If the result is `True` (or no condition exists), proceed to submit for execution.
+
+3.  **Wait & Callback**:
+    *   The main thread blocks using `wait(return_when=FIRST_COMPLETED)` until at least one node finishes.
+    *   Once a node completes, update the `completed_nodes` set and `Global Memory`.
+    *   Loop back to Step 1 to check if new nodes have their dependencies met (unlocked by the recently completed node).
+
+4.  **Deadlock Detection**:
+    *   If there are no currently running nodes and there are still incomplete nodes, but no nodes become `READY`, a deadlock is detected (usually caused by circular dependencies), and an exception is raised.
+
 
 ### Execution Flow
 

@@ -97,7 +97,7 @@ Runtime 负责解析 DSL 并调度节点的执行。它采用了 **基于数据�
 
 ### 架构图 (Architecture Diagram)
 
-![Runtime Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIENMSVtDTEkgLyBBUEldIC0tPiBQYXJzZXJbRFNMIFBhcnNlcl0KICAgIFBhcnNlciAtLT58V29ya2Zsb3dHcmFwaHwgRW5naW5lW1dvcmtmbG93IEVuZ2luZV0KICAgIAogICAgc3ViZ3JhcGggUnVudGltZSBDb3JlCiAgICAgICAgRW5naW5lIC0tPnxSZWFkL1dyaXRlfCBNZW1vcnlbR2xvYmFsIE1lbW9yeV0KICAgICAgICBFbmdpbmUgLS0+fFN1Ym1pdCBUYXNrc3wgRXhlY3V0b3JbVGhyZWFkUG9vbCBFeGVjdXRvcl0KICAgICAgICAKICAgICAgICBFeGVjdXRvciAtLT58UnVufCBOb2RlQVtOb2RlIEluc3RhbmNlIEFdCiAgICAgICAgRXhlY3V0b3IgLS0+fFJ1bnwgTm9kZUJbTm9kZSBJbnN0YW5jZSBCXQogICAgICAgIAogICAgICAgIE5vZGVBIC0tPnxSZXN1bHR8IE1lbW9yeQogICAgICAgIE5vZGVCIC0tPnxSZXN1bHR8IE1lbW9yeQogICAgZW5kCiAgICAKICAgIE1lbW9yeSAtLi0+fENvbnRleHR8IE5vZGVBCiAgICBNZW1vcnkgLS4tPnxDb250ZXh0fCBOb2RlQg==)
+![Runtime Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIENMSVtDTEkgLyBBUEldIC0tPiBQYXJzZXJbRFNMIFBhcnNlcl0KICAgIFBhcnNlciAtLT58V29ya2Zsb3dHcmFwaHwgRW5naW5lW1dvcmtmbG93IEVuZ2luZV0KICAgIAogICAgc3ViZ3JhcGggUnVudGltZV9Db3JlIFtSdW50aW1lIENvcmVdCiAgICAgICAgZGlyZWN0aW9uIFRCCiAgICAgICAgRW5naW5lIC0tPnxJbml0fCBNZW1vcnlbR2xvYmFsIE1lbW9yeV0KICAgICAgICAKICAgICAgICBzdWJncmFwaCBTY2hlZHVsZXIgW1NjaGVkdWxlciBMb29wXQogICAgICAgICAgICBkaXJlY3Rpb24gVEIKICAgICAgICAgICAgQ2hlY2tbRGVwZW5kZW5jeSBDaGVja10KICAgICAgICAgICAgU3VibWl0W1N1Ym1pdCBUYXNrc10KICAgICAgICAgICAgV2FpdFtXYWl0IGZvciBFdmVudF0KICAgICAgICAgICAgVXBkYXRlW1VwZGF0ZSBTdGF0ZV0KICAgICAgICAgICAgCiAgICAgICAgICAgIENoZWNrIC0tPnxSZWFkeXwgU3VibWl0CiAgICAgICAgICAgIENoZWNrIC0tPnxTa2lwcGVkfCBVcGRhdGUKICAgICAgICAgICAgU3VibWl0IC0tPnxGdXR1cmV8IFdhaXQKICAgICAgICAgICAgV2FpdCAtLT58Tm9kZSBGaW5pc2hlZHwgVXBkYXRlCiAgICAgICAgICAgIFVwZGF0ZSAtLT4gQ2hlY2sKICAgICAgICBlbmQKICAgICAgICAKICAgICAgICBFbmdpbmUgLS0+IENoZWNrCiAgICAgICAgCiAgICAgICAgU3VibWl0IC0tPiBFeGVjdXRvcltUaHJlYWRQb29sIEV4ZWN1dG9yXQogICAgICAgIAogICAgICAgIEV4ZWN1dG9yIC0tPnxBc3luYyBSdW58IE5vZGVbTm9kZSBJbnN0YW5jZV0KICAgICAgICBOb2RlIC0tPnxXcml0ZSBSZXN1bHR8IE1lbW9yeQogICAgZW5k)
 
 ### 核心组件
 
@@ -121,6 +121,42 @@ Runtime 负责解析 DSL 并调度节点的执行。它采用了 **基于数据�
 4.  **Node System (`runtime/nodes/`)**:
     *   定义了 `Node` 基类和具体实现 (e.g., `LLMNode`, `RouterNode`).
     *   每个节点独立执行，接收 `inputs`，返回字典结果。
+
+### 4. 调度算法详解 (Scheduling Algorithm Detail)
+
+Runtime 的调度核心维护了一个状态循环，确保节点按正确的依赖顺序和并行度执行。
+
+#### 状态管理
+每个节点在生命周期中会处于以下状态之一：
+- **PENDING**: 初始状态，等待依赖满足。
+- **READY**: 所有依赖已完成 (Completed)，准备提交执行。
+- **RUNNING**: 正在线程池中执行。
+- **COMPLETED**: 执行成功，结果已写入 Global Memory。
+- **SKIPPED**: 因依赖被跳过或条件 (Condition) 不满足而被跳过。
+
+#### 调度循环 (Scheduling Loop)
+`WorkflowEngine.run()` 方法的主循环逻辑如下：
+
+1.  **检测依赖 (Dependency Check)**:
+    *   遍历所有未完成 (Non-Terminal) 的节点。
+    *   **Propagation (跳过传播)**: 如果某节点的 *任意* 前置依赖节点处于 `SKIPPED` 状态，则该节点立即标记为 `SKIPPED`。
+    *   **Activation (激活)**: 如果某节点的 *所有* 前置依赖节点都处于 `COMPLETED` 状态，则该节点标记为 `READY`。
+
+2.  **提交任务 (Submission)**:
+    *   将所有 `READY` 状态的节点提交给 `ThreadPoolExecutor`。
+    *   在提交前进行 **条件求值 (Condition Evaluation)**:
+        *   渲染 `condition` 模板 (e.g., `{{ inputs.val > 10 }}`)。
+        *   如果结果为 `False`，不提交任务，直接将节点标记为 `SKIPPED`。
+        *   如果结果为 `True` (或无条件)，则正式提交执行。
+
+3.  **等待与回调 (Wait & Callback)**:
+    *   主线程使用 `wait(return_when=FIRST_COMPLETED)` 阻塞，直到至少一个节点执行完毕。
+    *   一旦有节点完成，更新 `completed_nodes` 集合和 `Global Memory`。
+    *   循环回到第 1 步，检查是否有新的节点满足了依赖 (被刚刚完成的节点解锁)。
+
+4.  **死锁检测 (Deadlock Detection)**:
+    *   如果当前没有正在运行的节点，且仍有未完成的节点，但没有任何节点变为 `READY`，则判定为死锁 (通常由循环依赖导致)，抛出异常。
+
 
 ### 执行流程
 
