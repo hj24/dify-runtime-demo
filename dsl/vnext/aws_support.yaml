@@ -1,0 +1,101 @@
+id: aws_support_bot
+version: "1.0"
+start: intent_classifier
+
+inputs:
+  query: string
+  conversation_id: string
+
+nodes:
+  # 1. Intent Classification
+  intent_classifier:
+    type: llm
+    inputs:
+      model: "gpt-3.5-turbo"
+      prompt: |
+        You are an intent classifier for an AWS support bot.
+        Classify the following user query into exactly one of these categories:
+        - technical_issue
+        - billing
+        - general_inquiry
+        - resolved_from_history
+
+        Conversation History:
+        {{ inputs.memory }}
+
+        Query: {{ inputs.query }}
+
+        Instructions:
+        - If the user's query is a follow-up question, OR if it is asking the same question as before, OR if it can be answered directly from the Conversation History, classify as 'resolved_from_history'.
+        - Otherwise, classify based on the topic.
+
+        Return ONLY the identified category name (e.g., resolved_from_history). Do not output anything else.
+      temperature: 0.1
+    next: [router]
+
+  # 2. Router (Branching)
+  router:
+    type: router
+    inputs:
+      intent: "{{ intent_classifier.text.strip() }}"
+    next: [search_official_docs, search_community_forum, direct_reply]
+  
+  # Branch A: Technical Issue -> Parallel Search
+  search_official_docs:
+    type: mock_search
+    condition: "{{ 'technical_issue' in intent_classifier.text }}"
+    inputs:
+      query: "{{ inputs.query }}"
+      source: "official_docs"
+      duration: 2  # Simulate slow search
+    next: [summarize_solution]
+
+  search_community_forum:
+    type: mock_search
+    condition: "{{ 'technical_issue' in intent_classifier.text }}"
+    inputs:
+      query: "{{ inputs.query }}"
+      source: "community_forum"
+      duration: 1  # Simulate fast search
+    next: [summarize_solution]
+
+  summarize_solution:
+    type: llm
+    depends_on: [search_official_docs, search_community_forum]
+    inputs:
+      model: "gpt-4"
+      prompt: |
+        User Query: {{ inputs.query }}
+        
+        Official Docs: {{ search_official_docs.results }}
+        Community Forum: {{ search_community_forum.results }}
+        
+        Please provide a comprehensive solution based on the above.
+    next: [end_node]
+
+  # Branch B: Other -> Direct Reply
+  direct_reply:
+    type: llm
+    condition: "{{ 'technical_issue' not in intent_classifier.text }}"
+    inputs:
+      model: "gpt-3.5-turbo"
+      prompt: |
+        You are an AWS support assistant.
+        
+        User Query: {{ inputs.query }}
+        Intent: {{ intent_classifier.text }}
+        Conversation History:
+        {{ inputs.memory }}
+        
+        Instructions:
+        - If Intent is 'resolved_from_history', answer the user's query based on the Conversation History.
+        - If Intent is 'billing' or 'general_inquiry', politely inform the user that you only handle technical issues and suggest they contact the appropriate department.
+    next: [end_node]
+
+  # End Node
+  end_node:
+    type: print
+    depends_on: [summarize_solution, direct_reply]
+    inputs:
+      message: "{{ (summarize_solution | default({})).text or (direct_reply | default({})).text }}"
+    end: true

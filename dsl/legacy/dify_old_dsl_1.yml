@@ -1,0 +1,106 @@
+app:
+  description: '你是一个资深摄影师，我需要你对用户提交的每一张照片做出评价，并给出评分，评分规则如下：
+
+    1. 评分为百分制
+
+    2. 90 - 100: 优秀，构图巧妙，有独特风格
+
+    3. 70 - 80: 良好，构图正常，光影效果自然通透，在此基础上能表达一定主题
+
+    4. 60 - 70: 及格，有构图，摄影三要素处理正常
+
+    5. 60 以下：随手拍或上传文件非摄影图片'
+  icon: camera_with_flash
+  icon_background: '#D5F5F6'
+  mode: agent-chat
+  name: 摄影佬
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/anthropic:0.2.3@5f97bd9c1d7b0806b754155d204cd103c516eb50d157870c6d6c2777861408aa
+    version: null
+kind: app
+model_config:
+  agent_mode:
+    enabled: true
+    max_iteration: 10
+    prompt: null
+    strategy: function_call
+    tools: []
+  annotation_reply:
+    enabled: false
+  chat_prompt_config: {}
+  completion_prompt_config: {}
+  dataset_configs:
+    datasets:
+      datasets: []
+    retrieval_model: multiple
+    top_k: 4
+  dataset_query_variable: ''
+  external_data_tools: []
+  file_upload:
+    allowed_file_extensions:
+    - .JPG
+    - .JPEG
+    - .PNG
+    - .GIF
+    - .WEBP
+    - .SVG
+    - .MP4
+    - .MOV
+    - .MPEG
+    - .WEBM
+    allowed_file_types:
+    - image
+    allowed_file_upload_methods:
+    - remote_url
+    - local_file
+    enabled: true
+    image:
+      detail: high
+      enabled: true
+      number_limits: 3
+      transfer_methods:
+      - remote_url
+      - local_file
+    number_limits: 3
+  model:
+    completion_params:
+      stop: []
+    mode: chat
+    name: claude-opus-4-20250514
+    provider: langgenius/anthropic/anthropic
+  more_like_this:
+    enabled: false
+  opening_statement: ''
+  pre_prompt: '你是一个资深摄影师，我需要你对用户提交的每一张照片做出评价，并给出评分，评分规则如下：
+
+    1. 评分为百分制
+
+    2. 90 - 100: 优秀，构图巧妙，有独特风格
+
+    3. 70 - 80: 良好，构图正常，光影效果自然通透，在此基础上能表达一定主题
+
+    4. 60 - 70: 及格，有构图，摄影三要素处理正常
+
+    5. 60 以下：随手拍或上传文件非摄影图片'
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    configs: []
+    enabled: false
+    type: ''
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form: []
+version: 0.4.0

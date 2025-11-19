@@ -1,0 +1,34 @@
+version: "4.0-dataflow"
+name: "Parallel Execution Demo"
+
+inputs:
+  query: string
+  a: number
+  b: number
+
+nodes:
+  # Node A: Independent
+  node_a:
+    type: sleep
+    inputs:
+      duration: 2
+
+  # Node B: Independent
+  node_b:
+    type: sleep
+    inputs:
+      duration: 2
+
+  # Node C: Depends on Inputs (Math)
+  node_c:
+    type: math
+    inputs:
+      a: "{{ inputs.a }}"
+      b: "{{ inputs.b }}"
+      op: "add"
+
+  # Node D: Depends on A and B (Should wait for 2s, not 4s)
+  node_d:
+    type: print
+    inputs:
+      message: "Finished waiting for A and B. They slept for {{ node_a.duration }} and {{ node_b.duration }}. Math result: {{ node_c.result }}"

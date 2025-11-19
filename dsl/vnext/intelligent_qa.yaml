@@ -1,0 +1,73 @@
+id: intelligent_qa_demo
+version: "1.0"
+start: extract_keywords
+
+inputs:
+  question: string
+
+nodes:
+  # 步骤1: 提取问题中的关键词
+  extract_keywords:
+    type: llm
+    inputs:
+      model: "gpt-3.5-turbo"
+      prompt: |
+        Extract 3-5 key concepts from this question: {{ inputs.question }}
+        Return ONLY the keywords as a comma-separated list.
+      temperature: 0.3
+    next: [generate_outline, search_context]
+
+  # 步骤2: 基于问题生成答案大纲（并行执行）
+  generate_outline:
+    type: llm
+    inputs:
+      model: "gpt-3.5-turbo"
+      prompt: |
+        Create a brief outline for answering this question: {{ inputs.question }}
+        Use bullet points.
+      temperature: 0.7
+
+  # 步骤3: 模拟搜索上下文信息（并行执行）
+  search_context:
+    type: mock_search
+    inputs:
+      keywords: "{{ extract_keywords.text }}"
+
+  # 步骤4: 综合所有信息生成最终答案
+  generate_final_answer:
+    type: llm
+    depends_on:
+      - extract_keywords
+      - generate_outline
+      - search_context
+    inputs:
+      model: "gpt-4o-mini"
+      prompt: |
+        Question: {{ inputs.question }}
+        
+        Keywords extracted: {{ extract_keywords.text }}
+        
+        Answer outline:
+        {{ generate_outline.text }}
+        
+        Context information:
+        {{ search_context.results }}
+        
+        Now provide a comprehensive answer to the question, incorporating the above information.
+      temperature: 0.5
+    next: [format_response]
+
+  # 步骤5: 格式化最终输出
+  format_response:
+    type: format
+    depends_on:
+      - generate_final_answer
+    inputs:
+      template: |
+        🔍 Keywords: {{ extract_keywords.text }}
+        
+        📝 Answer:
+        {{ generate_final_answer.text }}
+        
+        ℹ️ Sources: {{ search_context.sources }}
+    end: true
