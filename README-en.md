@@ -10,13 +10,13 @@ You can execute the Workflow using the command-line tool `runtime/main.py`.
 
 ```bash
 # Run the default demo
-python3 -m runtime.main --file dsl/vnext/demo.yaml
+uv run python -m runtime.main --file dsl/vnext/demo.yaml
 
 # Run without database persistence (for testing)
-python3 -m runtime.main --file dsl/vnext/demo.yaml --no-db
+uv run python -m runtime.main --file dsl/vnext/demo.yaml --no-db
 
 # Run in interactive chat mode
-python3 -m runtime.main --file dsl/vnext/aws_support.yaml --chat --no-db
+uv run python -m runtime.main --file dsl/vnext/aws_support.yaml --chat --no-db
 ```
 
 ### Arguments
@@ -36,7 +36,7 @@ The DSL uses YAML format to define the structure of the Workflow, its nodes, and
 A standard DSL file contains the following parts:
 
 ```yaml
-version: "4.0-dataflow"  # DSL Version
+version: "1.0"  # DSL Version
 name: "Workflow Name"    # Workflow Name
 start: "start_node_id"   # (Optional) Start node, usually inferred from dependencies
 

@@ -10,13 +10,13 @@
 
 ```bash
 # 运行默认示例
-python3 -m runtime.main --file dsl/vnext/demo.yaml
+uv run python -m runtime.main --file dsl/vnext/demo.yaml
 
 # 运行不带数据库持久化的版本 (用于测试)
-python3 -m runtime.main --file dsl/vnext/demo.yaml --no-db
+uv run python -m runtime.main --file dsl/vnext/demo.yaml --no-db
 
 # 运行交互式对话模式 (Chat Mode)
-python3 -m runtime.main --file dsl/vnext/aws_support.yaml --chat --no-db
+uv run python -m runtime.main --file dsl/vnext/aws_support.yaml --chat --no-db
 ```
 
 ### 参数说明
