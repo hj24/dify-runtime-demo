@@ -36,7 +36,7 @@ DSL 使用 YAML 格式定义 Workflow 的结构、节点及其依赖关系。
 一个标准的 DSL 文件包含以下部分：
 
 ```yaml
-version: "4.0-dataflow"  # DSL 版本号
+version: "1.0"  # DSL 版本号
 name: "Workflow Name"    # 工作流名称
 start: "start_node_id"   # (可选) 起始节点，通常由依赖关系自动推导
 
